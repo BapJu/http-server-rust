@@ -75,7 +75,7 @@ async fn main() {
                                     match file_content {
                                         Ok(content) => {
                                             response = format!(
-                                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
                                                 content.len(),
                                                 content
                                             );
