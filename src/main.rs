@@ -28,17 +28,17 @@ fn main() {
                         let request_parts: Vec<&str> = request_line.split_whitespace().collect();
                         let path = request_parts[1];
 
-                        // Logique de traitement de la requête
-                        let mut response = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
+                        
+                        let mut response = "HTTP/1.1 404 Not Found\r\n\r\n";
                         if path == "/" {
                             response = "HTTP/1.1 200 OK\r\n\r\n";
                         }
                         
-                        // Préparation et envoi de la réponse
+                        
                         stream.write_all(response.as_bytes()).unwrap();
 
                         
-                        // Assurez-vous que toutes les données sont envoyées avant de passer à la prochaine itération
+                        
                         stream.flush().unwrap();
                     },
                     Err(e) => {
