@@ -1,13 +1,24 @@
 use async_std::io;
 use async_std::net::TcpListener;
 use async_std::prelude::*;
-
-
+use std::env;
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
+
+    // Récupérer le répertoire des fichiers depuis les arguments de ligne de commande
+    let args: Vec<String> = env::args().collect();
+    let mut directory = String::from("/tmp");
+    
+    for i in 0..args.len() {
+        if args[i] == "--directory" && i + 1 < args.len() {
+            directory = args[i + 1].clone();
+            break;
+        }
+    }
 
     // Uncomment this block to pass the first stage
     //
@@ -18,6 +29,7 @@ async fn main() {
     while let Some(stream) = incoming.next().await {
         match stream {
             Ok(mut stream) => {
+                let directory_clone = directory.clone();
                 task::spawn(async move {
                     let mut buffer = [0; 1024];
                     match stream.read(&mut buffer).await {
@@ -56,10 +68,10 @@ async fn main() {
                                         user_agent
                                     );
                                 }
-                            } else if *path=="files" {
-                                if let Some(echo_str) = path_part.get(2) {
-                                    let file_path = format!("/tmp/{}", echo_str);
-                                    let file_content = std::fs::read_to_string(file_path);
+                            } else if *path == "files" {
+                                if let Some(file_name) = path_part.get(2) {
+                                    let file_path = PathBuf::from(&directory_clone).join(file_name);
+                                    let file_content = std::fs::read_to_string(&file_path);
                                     match file_content {
                                         Ok(content) => {
                                             response = format!(
@@ -68,13 +80,13 @@ async fn main() {
                                                 content
                                             );
                                         }
-                                        Err(_) => {
+                                        Err(e) => {
+                                            eprintln!("Erreur lors de la lecture du fichier {:?}: {}", file_path, e);
                                             response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
                                         }
                                     }
                                 }
                             }
-
 
                             if let Err(e) = stream.write_all(response.as_bytes()).await {
                                 eprintln!("Erreur d'écriture: {}", e);
@@ -95,5 +107,3 @@ async fn main() {
         }
     }
 }
-
-
