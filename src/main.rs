@@ -40,6 +40,11 @@ fn main() {
                             response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo_str.len(), echo_str);
 
                         }
+                        else if path=="user-agent" { 
+                            let user_agents = request_lines[1];
+                            let user_agent = user_agents.split(": ").collect::<Vec<&str>>()[1];
+                            response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", user_agent.len(), user_agent);
+                        }
 
 
                         stream.write_all(response.as_bytes()).unwrap();
