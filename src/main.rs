@@ -26,19 +26,26 @@ fn main() {
                         let request_lines: Vec<&str> = request.split("\r\n").collect();
                         let request_line = request_lines[0];
                         let request_parts: Vec<&str> = request_line.split_whitespace().collect();
-                        let path = request_parts[1];
+                        let all_paths = request_parts[1];
+                        let path_part : Vec<&str> = all_paths.split("/").collect();
+                        let path = path_part[1];
 
-                        
-                        let mut response = "HTTP/1.1 404 Not Found\r\n\r\n";
-                        if path == "/" {
-                            response = "HTTP/1.1 200 OK\r\n\r\n";
+
+                        let mut response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
+                        if path == "" {
+                            response = String::from("HTTP/1.1 200 OK\r\n\r\n");
                         }
-                        
-                        
+                        else if path=="echo" {
+                            let echo_str = path_part[2];
+                            response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo_str.len(), echo_str);
+
+                        }
+
+
                         stream.write_all(response.as_bytes()).unwrap();
 
                         
-                        
+
                         stream.flush().unwrap();
                     },
                     Err(e) => {
