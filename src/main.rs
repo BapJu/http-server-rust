@@ -13,74 +13,69 @@ async fn main() {
     //
     let listener = TcpListener::bind("127.0.0.1:4221").await.unwrap();
     let mut incoming = listener.incoming();
+    use async_std::task;
+
     while let Some(stream) = incoming.next().await {
         match stream {
             Ok(mut stream) => {
-                // Création d'un buffer pour stocker les données reçues
-                let mut buffer = [0; 1024];
+                task::spawn(async move {
+                    let mut buffer = [0; 1024];
+                    match stream.read(&mut buffer).await {
+                        Ok(_) => {
+                            let request = String::from_utf8_lossy(&buffer);
+                            let request_lines: Vec<&str> = request.split("\r\n").collect();
+                            let request_line = request_lines[0];
+                            let request_parts: Vec<&str> = request_line.split_whitespace().collect();
+                            let all_paths = request_parts.get(1).unwrap_or(&"");
+                            let path_part: Vec<&str> = all_paths.split('/').collect();
+                            let path = path_part.get(1).unwrap_or(&"");
 
-                // Lecture des données depuis le stream
-                match stream.read(&mut buffer).await {
-                    Ok(_) => {
-                        println!("Request: {}", String::from_utf8_lossy(&buffer));
-
-                        //Get request path
-                        let request = String::from_utf8_lossy(&buffer);
-                        let request_lines: Vec<&str> = request.split("\r\n").collect();
-                        let request_line = request_lines[0];
-                        let request_parts: Vec<&str> = request_line.split_whitespace().collect();
-                        let all_paths = request_parts[1];
-                        let path_part : Vec<&str> = all_paths.split("/").collect();
-                        let path = path_part[1];
-
-
-                        let mut response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
-                        if path == "" {
-                            response = String::from("HTTP/1.1 200 OK\r\n\r\n");
-                        }
-                        else if path=="echo" {
-                            let echo_str = path_part[2];
-                            response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo_str.len(), echo_str);
-
-                        }
-                        else if path=="user-agent" {
-                            //loking for user-agent on request lines (not especilly on the first line)
-                            let mut user_agent_line = String::new();
-                            for line in request_lines.iter() {
-                                if line.starts_with("User-Agent:") {
-                                    user_agent_line = line.to_string();
-                                    break;
+                            let mut response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
+                            if *path == "" {
+                                response = String::from("HTTP/1.1 200 OK\r\n\r\n");
+                            } else if *path == "echo" {
+                                if let Some(echo_str) = path_part.get(2) {
+                                    response = format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                        echo_str.len(),
+                                        echo_str
+                                    );
+                                }
+                            } else if *path == "user-agent" {
+                                let mut user_agent_line = String::new();
+                                for line in request_lines.iter() {
+                                    if line.starts_with("User-Agent:") {
+                                        user_agent_line = line.to_string();
+                                        break;
+                                    }
+                                }
+                                if let Some(user_agent) = user_agent_line.split(": ").nth(1) {
+                                    response = format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                        user_agent.len(),
+                                        user_agent
+                                    );
                                 }
                             }
 
-
-
-
-                            let user_agent = user_agent_line.split(": ").collect::<Vec<&str>>()[1];
-                            println!("User-agent: {}", user_agent);
-                            println!("User-agent len : {}", user_agent.len());
-                            response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", user_agent.len(), user_agent);
+                            if let Err(e) = stream.write_all(response.as_bytes()).await {
+                                eprintln!("Erreur d'écriture: {}", e);
+                            }
+                            if let Err(e) = stream.flush().await {
+                                eprintln!("Erreur de flush: {}", e);
+                            }
                         }
-
-
-                        stream.write_all(response.as_bytes()).await.unwrap();
-
-
-
-                        stream.flush().await.unwrap();
-                    },
-                    Err(e) => {
-                        println!("Erreur de lecture: {}", e);
+                        Err(e) => {
+                            eprintln!("Erreur de lecture: {}", e);
+                        }
                     }
-                }
+                });
             }
             Err(e) => {
-                println!("error: {}", e);
+                eprintln!("Erreur de connexion: {}", e);
             }
         }
     }
-        
 }
-    
         
 
