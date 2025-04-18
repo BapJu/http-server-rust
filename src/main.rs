@@ -58,7 +58,7 @@ async fn main() {
                                 }
                             } else if *path=="files" {
                                 if let Some(echo_str) = path_part.get(2) {
-                                    let file_path = format!("tmp/{}", echo_str);
+                                    let file_path = format!("/tmp/{}", echo_str);
                                     let file_content = std::fs::read_to_string(file_path);
                                     match file_content {
                                         Ok(content) => {
