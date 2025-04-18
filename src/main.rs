@@ -1,23 +1,26 @@
-use std::io::{Read, Write};
-#[allow(unused_imports)]
-use std::net::TcpListener;
+use async_std::io;
+use async_std::net::TcpListener;
+use async_std::prelude::*;
 
-fn main() {
+
+
+#[tokio::main]
+async fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
 
     // Uncomment this block to pass the first stage
     //
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
-    //
-    for stream in listener.incoming() {
+    let listener = TcpListener::bind("127.0.0.1:4221").await.unwrap();
+    let mut incoming = listener.incoming();
+    while let Some(stream) = incoming.next().await {
         match stream {
-            Ok(mut stream) => { 
+            Ok(mut stream) => {
                 // Création d'un buffer pour stocker les données reçues
                 let mut buffer = [0; 1024];
-                
+
                 // Lecture des données depuis le stream
-                match stream.read(&mut buffer) {
+                match stream.read(&mut buffer).await {
                     Ok(_) => {
                         println!("Request: {}", String::from_utf8_lossy(&buffer));
 
@@ -49,8 +52,8 @@ fn main() {
                                     break;
                                 }
                             }
-                            
-                            
+
+
 
 
                             let user_agent = user_agent_line.split(": ").collect::<Vec<&str>>()[1];
@@ -60,11 +63,11 @@ fn main() {
                         }
 
 
-                        stream.write_all(response.as_bytes()).unwrap();
+                        stream.write_all(response.as_bytes()).await.unwrap();
 
-                        
 
-                        stream.flush().unwrap();
+
+                        stream.flush().await.unwrap();
                     },
                     Err(e) => {
                         println!("Erreur de lecture: {}", e);
@@ -76,4 +79,8 @@ fn main() {
             }
         }
     }
+        
 }
+    
+        
+
