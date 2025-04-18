@@ -56,7 +56,25 @@ async fn main() {
                                         user_agent
                                     );
                                 }
+                            } else if *path=="files" {
+                                if let Some(echo_str) = path_part.get(2) {
+                                    let file_path = format!("tmp/{}", echo_str);
+                                    let file_content = std::fs::read_to_string(file_path);
+                                    match file_content {
+                                        Ok(content) => {
+                                            response = format!(
+                                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                                content.len(),
+                                                content
+                                            );
+                                        }
+                                        Err(_) => {
+                                            response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
+                                        }
+                                    }
+                                }
                             }
+
 
                             if let Err(e) = stream.write_all(response.as_bytes()).await {
                                 eprintln!("Erreur d'écriture: {}", e);
@@ -77,5 +95,5 @@ async fn main() {
         }
     }
 }
-        
+
 
