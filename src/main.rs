@@ -40,9 +40,22 @@ fn main() {
                             response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo_str.len(), echo_str);
 
                         }
-                        else if path=="user-agent" { 
-                            let user_agents = request_lines[1];
-                            let user_agent = user_agents.split(": ").collect::<Vec<&str>>()[1];
+                        else if path=="user-agent" {
+                            //loking for user-agent on request lines (not especilly on the first line)
+                            let mut user_agent_line = String::new();
+                            for line in request_lines.iter() {
+                                if line.starts_with("User-Agent:") {
+                                    user_agent_line = line.to_string();
+                                    break;
+                                }
+                            }
+                            
+                            
+
+
+                            let user_agent = user_agent_line.split(": ").collect::<Vec<&str>>()[1];
+                            println!("User-agent: {}", user_agent);
+                            println!("User-agent len : {}", user_agent.len());
                             response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", user_agent.len(), user_agent);
                         }
 
