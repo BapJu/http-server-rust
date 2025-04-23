@@ -1,12 +1,16 @@
-use std::env;
+use std::{env, io};
 use std::path::PathBuf;
 use async_std::io::{ReadExt, WriteExt};
 use async_std::net::TcpListener;
 use async_std::net::TcpStream;
+use flate2::Compression;
+use flate2::write::GzEncoder;
+use std::io::Write;
 
 #[tokio::main]
 async fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
+
     println!("Logs from your program will appear here!");
 
     // Récupérer le répertoire des fichiers depuis les arguments de ligne de commande
@@ -42,6 +46,7 @@ async fn main() {
     }
 }
 
+
 async fn handle_connection(mut stream: TcpStream, directory: String, data: String) {
     let mut buffer = [0; 1024];
     match stream.read(&mut buffer).await {
@@ -54,85 +59,96 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
             let path_part: Vec<&str> = all_paths.split('/').collect();
             let path = path_part.get(1).unwrap_or(&"");
 
-
-            let mut response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
             let method = request_parts.get(0).unwrap_or(&"GET");
             let mut accept_encoding = String::new();
             for line in request_lines.iter() {
                 if line.starts_with("Accept-Encoding:") {
-                    // Extract the value after the header name and colon
                     let parts: Vec<_> = line.split(':').collect();
                     if parts.len() > 1 {
-                        // Trim whitespace from the value part
                         accept_encoding = parts[1].trim().to_string();
                     }
                     break;
                 }
             }
 
+            // Default: 404
+            let mut response_bytes = b"HTTP/1.1 404 Not Found\r\n\r\n".to_vec();
+
             if *method == "GET" {
                 if *path == "" {
-                    response = String::from("HTTP/1.1 200 OK\r\n\r\n");
+                    response_bytes = b"HTTP/1.1 200 OK\r\n\r\n".to_vec();
                 } else if *path == "echo" {
                     if let Some(echo_str) = path_part.get(2) {
-                        // Check if the client accepts gzip encoding
+                        // Convert to hex
+                        let hex_rep = echo_str.bytes()
+                            .map(|b| format!("{:02x}", b))
+                            .collect::<String>();
+
                         if accept_encoding.contains("gzip") {
-                            response = format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n{}",
-                                echo_str.len(),
-                                echo_str
+                            // Gzip compress
+                            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                            encoder.write_all(hex_rep.as_bytes()).unwrap();
+                            let compressed = encoder.finish().unwrap();
+                            let header = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n",
+                                compressed.len()
                             );
+                            // Build binary response
+                            response_bytes = header.into_bytes();
+                            response_bytes.extend_from_slice(&compressed);
                         } else {
-                            response = format!(
+                            let body = hex_rep;
+                            let header = format!(
                                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                                echo_str.len(),
-                                echo_str
+                                body.len(), body
                             );
+                            response_bytes = header.into_bytes();
                         }
                     }
-
                 } else if *path == "user-agent" {
-                    let mut user_agent_line = String::new();
+                    let mut user_agent = "";
                     for line in request_lines.iter() {
                         if line.starts_with("User-Agent:") {
-                            user_agent_line = line.to_string();
+                            user_agent = line.split(": ").nth(1).unwrap_or("");
                             break;
                         }
                     }
-                    if let Some(user_agent) = user_agent_line.split(": ").nth(1) {
+                    if !user_agent.is_empty() {
                         if accept_encoding.contains("gzip") {
-                            response = format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n{}",
-                                user_agent.len(),
-                                user_agent
+                            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                            encoder.write_all(user_agent.as_bytes()).unwrap();
+                            let compressed = encoder.finish().unwrap();
+                            let header = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n",
+                                compressed.len()
                             );
-
-                        }else {
-                            response = format!(
+                            response_bytes = header.into_bytes();
+                            response_bytes.extend_from_slice(&compressed);
+                        } else {
+                            let header = format!(
                                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                                user_agent.len(),
-                                user_agent
+                                user_agent.len(), user_agent
                             );
+                            response_bytes = header.into_bytes();
                         }
-
                     }
                 } else if *path == "files" {
                     if let Some(file_name) = path_part.get(2) {
-                        let file_path = PathBuf::from(&directory).join(file_name);
-                        // Utiliser le fs synchrone pour lire le contenu du fichier
-                        // Dans un serveur de production, vous devriez utiliser fs::read_to_string
-                        let file_content = std::fs::read_to_string(&file_path);
+                        let path = PathBuf::from(&directory).join(file_name);
+                        let file_content = std::fs::read(&path); // as Vec<u8>
+
                         match file_content {
                             Ok(content) => {
-                                response = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
-                                    content.len(),
-                                    content
+                                let header = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n",
+                                    content.len()
                                 );
+                                response_bytes = header.into_bytes();
+                                response_bytes.extend_from_slice(&content);
                             }
                             Err(e) => {
-                                eprintln!("Erreur lors de la lecture du fichier {:?}: {}", file_path, e);
-                                response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
+                                eprintln!("File read error {:?}: {}", path, e);
+                                response_bytes = b"HTTP/1.1 404 Not Found\r\n\r\n".to_vec();
                             }
                         }
                     }
@@ -141,34 +157,28 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
                 if *path == "files" {
                     if let Some(file_name) = path_part.get(2) {
                         let file_path = PathBuf::from(&directory).join(file_name);
-
-                        // Extract the body of the POST request
                         let body_start = request.find("\r\n\r\n").map(|pos| pos + 4).unwrap_or(0);
-                        let body = &request[body_start..].replace("\x00","");
-
-                        // Write the body to the specified file
+                        let body = &request[body_start..].replace("\x00", "");
                         match std::fs::write(&file_path, body) {
-                            Ok(_) => {
-                                response = String::from("HTTP/1.1 201 Created\r\n\r\n");
-                            }
+                            Ok(_) => response_bytes = b"HTTP/1.1 201 Created\r\n\r\n".to_vec(),
                             Err(e) => {
-                                eprintln!("Erreur lors de l'écriture du fichier {:?}: {}", file_path, e);
-                                response = String::from("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+                                eprintln!("Write error {:?}: {}", file_path, e);
+                                response_bytes = b"HTTP/1.1 500 Internal Server Error\r\n\r\n".to_vec();
                             }
                         }
                     }
                 }
             }
 
-            if let Err(e) = stream.write_all(response.as_bytes()).await {
-                eprintln!("Erreur d'écriture: {}", e);
+            if let Err(e) = stream.write_all(&response_bytes).await {
+                eprintln!("Write error: {}", e);
             }
             if let Err(e) = stream.flush().await {
-                eprintln!("Erreur de flush: {}", e);
+                eprintln!("Flush error: {}", e);
             }
         }
         Err(e) => {
-            eprintln!("Erreur de lecture: {}", e);
+            eprintln!("Read error: {}", e);
         }
     }
 }
