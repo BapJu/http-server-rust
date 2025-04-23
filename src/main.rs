@@ -94,7 +94,7 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
                             response_bytes = header.into_bytes();
                             response_bytes.extend_from_slice(&compressed);
                         } else {
-                            let body = echo_str.as_bytes();
+                            let body = echo_str;
                             let header = format!(
                                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
                                 body.len(), body
