@@ -54,19 +54,43 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
             let path_part: Vec<&str> = all_paths.split('/').collect();
             let path = path_part.get(1).unwrap_or(&"");
 
+
             let mut response = String::from("HTTP/1.1 404 Not Found\r\n\r\n");
             let method = request_parts.get(0).unwrap_or(&"GET");
+            let mut accept_encoding = String::new();
+            for line in request_lines.iter() {
+                if line.starts_with("Accept-Encoding:") {
+                    // Extract the value after the header name and colon
+                    let parts: Vec<_> = line.split(':').collect();
+                    if parts.len() > 1 {
+                        // Trim whitespace from the value part
+                        accept_encoding = parts[1].trim().to_string();
+                    }
+                    break;
+                }
+            }
+
             if *method == "GET" {
                 if *path == "" {
                     response = String::from("HTTP/1.1 200 OK\r\n\r\n");
                 } else if *path == "echo" {
                     if let Some(echo_str) = path_part.get(2) {
-                        response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                            echo_str.len(),
-                            echo_str
-                        );
+                        // Check if the client accepts gzip encoding
+                        if accept_encoding.contains("gzip") {
+                            response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n{}",
+                                echo_str.len(),
+                                echo_str
+                            );
+                        } else {
+                            response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                echo_str.len(),
+                                echo_str
+                            );
+                        }
                     }
+
                 } else if *path == "user-agent" {
                     let mut user_agent_line = String::new();
                     for line in request_lines.iter() {
@@ -76,11 +100,21 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
                         }
                     }
                     if let Some(user_agent) = user_agent_line.split(": ").nth(1) {
-                        response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                            user_agent.len(),
-                            user_agent
-                        );
+                        if accept_encoding.contains("gzip") {
+                            response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n{}",
+                                user_agent.len(),
+                                user_agent
+                            );
+
+                        }else {
+                            response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                                user_agent.len(),
+                                user_agent
+                            );
+                        }
+
                     }
                 } else if *path == "files" {
                     if let Some(file_name) = path_part.get(2) {
