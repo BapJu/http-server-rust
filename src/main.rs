@@ -110,7 +110,7 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
 
                         // Extract the body of the POST request
                         let body_start = request.find("\r\n\r\n").map(|pos| pos + 4).unwrap_or(0);
-                        let body = &request[body_start..];
+                        let body = &request[body_start..].replace("\x00","");
 
                         // Write the body to the specified file
                         match std::fs::write(&file_path, body) {
