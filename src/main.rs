@@ -80,14 +80,11 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
                 } else if *path == "echo" {
                     if let Some(echo_str) = path_part.get(2) {
                         // Convert to hex
-                        let hex_rep = echo_str.bytes()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<String>();
 
                         if accept_encoding.contains("gzip") {
                             // Gzip compress
                             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-                            encoder.write_all(hex_rep.as_bytes()).unwrap();
+                            encoder.write_all(echo_str.as_bytes()).unwrap();
                             let compressed = encoder.finish().unwrap();
                             let header = format!(
                                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n",
@@ -97,7 +94,7 @@ async fn handle_connection(mut stream: TcpStream, directory: String, data: Strin
                             response_bytes = header.into_bytes();
                             response_bytes.extend_from_slice(&compressed);
                         } else {
-                            let body = hex_rep;
+                            let body = echo_str.as_bytes();
                             let header = format!(
                                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
                                 body.len(), body
